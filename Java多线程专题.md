@@ -549,11 +549,7 @@ public class TwoPhaseTermination {
 - suspend() 挂起线程运行
 - resume() 恢复线程运行
 
-### Synchronized
-
-
-
-#### **线程的死锁**
+### 线程的死锁
 
 死锁指的是两个或者两个以上线程在执行过程中，因为争夺资源而造成的互相等待的现象。并且在无外力作用下，这种等待会一直持续下去。
 
@@ -719,10 +715,138 @@ Java中线程优先级分为1~10，高优先级的线程会比低优先级的线
 **成员变量和静态变量是否线程安全？**
 
 - 如果它们没有共享，则线程安全
+- 如果它们被共享了，根据它们的状态是否能够改变
+  - 如果是只读操作，则线程安全
+  - 如果有读写操作，则这段代码是临界区，需要考虑线程安全
+
+**局部变量是否线程安全**
+
+- 基础类型的局部变量是安全的（局部变量存在每个线程各自的虚拟机栈的栈帧的局部变量表中，不存在共享）
+- 但是局部变量的引用对象不一定是安全的
+  - 如果该对象没有逃离方法的作用范围，它是安全的
+  - 如果该对象逃离了方法作用范围（比如被用return返回了），则需要考虑线程安全问题
+
+如何检查线程安全问题：
+
+1. 是否有变量
+2. 是局部变量，成员变量还是静态变量
+3. 变量是否被多个线程共享
+4. 是否有读写操作
 
 
 
+### 常见线程安全类
 
+- String
+- Integer
+- StringBuffer
+- Random
+- Vector
+- HashTabel（HashMap不是线程安全的实现类）
+- java.util.concurrent包下的类
+
+String，Integer等是不可变类，因为其内部的状态是不可改变，因此它们的方法都是线程安全的。比如String类的substring方法，返回的是一个新的字符串
+
+```java
+public String substring(int beginIndex) {
+    if (beginIndex < 0) {
+        throw new StringIndexOutOfBoundsException(beginIndex);
+    }
+    int subLen = value.length - beginIndex;
+    if (subLen < 0) {
+        throw new StringIndexOutOfBoundsException(subLen);
+    }
+    return (beginIndex == 0) ? this : new String(value, beginIndex, subLen);
+}
+```
+
+这里我们说的线程安全是指，多个线程调用同一个实例的某个方法时，是线程安全的。但是多个线程安全的方法组合在一起不一定是线程安全的
+
+```java
+Hashtable table  = new Hashtable();
+//线程1， 线程2
+if (table.get("key") == null) {
+	table.put("key",value);
+}
+```
+
+```mermaid
+sequenceDiagram
+participant t1 as 线程1
+participant t2 as 线程2
+participant table 
+t1 ->> table : get("key") == null
+t2 ->> table : get("key") == null
+t1 ->> table : put("key", v1)
+t2 ->> table : put("key", v2)
+
+
+
+```
+
+### Java对象头
+
+![image-20211101185008051](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211101185008051.png)
+
+在Hotspot虚拟机中，对象在内存中的存储布局分为 3 块区域：对象头（Header）、实例数据（Instance Data）和对齐填充（Padding）
+
+对象头包含了两部分，分别是 运行时元数据（Mark Word）和 类型指针
+
+> 如果是数组，还需要记录数组的长度
+
+普通的对象获取到的对象头结构为:
+
+```ruby
+|--------------------------------------------------------------|
+|                     Object Header (128 bits)                 |
+|------------------------------------|-------------------------|
+|        Mark Word (64 bits)         | Klass pointer (64 bits) |
+|------------------------------------|-------------------------|
+```
+
+数组对象获取到的对象头结构为:
+
+```ruby
+|---------------------------------------------------------------------------------|
+|                                 Object Header (128 bits)                        |
+|--------------------------------|-----------------------|------------------------|
+|        Mark Word(64bits)       | Klass pointer(32bits) |  array length(32bits)  |
+|--------------------------------|-----------------------|----------
+```
+
+Markword，这部分主要用来存储对象自身的运行时数据，如hashcode、gc分代年龄等。
+
+```
+|-------------------------------------------------------|--------------------|
+|                  Mark Word (32 bits)                  |       State        |
+|-------------------------------------------------------|--------------------|
+| identity_hashcode:25 | age:4 | biased_lock:1 | lock:2 |       Normal       |
+|-------------------------------------------------------|--------------------|
+|  thread:23 | epoch:2 | age:4 | biased_lock:1 | lock:2 |       Biased       |
+|-------------------------------------------------------|--------------------|
+|               ptr_to_lock_record:30          | lock:2 | Lightweight Locked |
+|-------------------------------------------------------|--------------------|
+|               ptr_to_heavyweight_monitor:30  | lock:2 | Heavyweight Locked |
+|-------------------------------------------------------|--------------------|
+|                                              | lock:2 |    Marked for GC   |
+|-------------------------------------------------------|--------------------|
+```
+
+### Monitor
+
+Monitor被翻译为监视器或管程
+
+![image-20211101192319315](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211101192319315.png)
+
+每个Java对象都可以被关联一个Monitor对象，如果使用synchronized给对象上锁（synchronized是重量级锁），该对象头的Mark Word中就被设置为指向Monitor对象的指针
+
+![image-20211101191911888](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211101191911888.png)
+
+- 刚开始Monitor中的Owner为null
+- 当Thread-2执行synchronized(obj)就会将Monitor 的Owner置位Thread-2。Monitor的Owner只能有一个
+- 如果在Thread-2为Owner时，Thread-3，Thread-4，Thread-5也来执行synchronzied(obj)，就会进入EntryList BLOCKED
+- 当Thread-2执行完同步代码块的内容后，唤醒EntryList中等待的线程来竞争锁，竞争是非公平的
+- 图中WaitSet中的Thread-0，Thread-1是之前获得过锁，但是条件不满足进入WAITING状态的线程。
 
 ### Java多线程内存模型
 
