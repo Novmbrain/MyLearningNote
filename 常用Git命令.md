@@ -315,3 +315,38 @@ $ pwd : Print Working Directory
 
 
 
+## 提起 pr 的过程描述
+
+以 macaca-chromedriver 项目举例：
+
+1. 先确认此项目还有人维护，不然浪费自己精力
+2. 检查已经存在的 issues 和 pull requests，确保不要做别人已经在做的事情
+3. 找到项目 macaca-chromedriver 点击 Fork，在你的 Github 主页也会存在此项目的拷贝，一定要先 Fork！我忽略了这一步，然后在坑里蹲了一会...
+4. 将 macaca-chromedriver Fork 的项目本地 Clone; 我的是`git clone https://github.com/Super-Ps/macaca-chromedriver.git`
+5. 进入刚才 Clone 的 Macaca-chromedriver 项目，建立本地仓库跟原始项目的的链接:`git remote add upstream https://github.com/macacajs/macaca-chromedriver.git`这样可以随时从原始项目 pull 最新的内容
+6. 查看远程仓库列表此时应该有 2 个仓库，一个你 Frok 的项目，一个原始的项目,我的是这样的：
+
+```
+$ git remote -v`
+`origin https://github.com/Super-Ps/macaca-chromedriver.git (fetch)`
+`origin https://github.com/Super-Ps/macaca-chromedriver.git (push)`
+`upstream https://github.com/macacajs/macaca-chromedriver.git (fetch)`
+`upstream https://github.com/macacajs/macaca-chromedriver.git (push)
+```
+
+1. 想好要修改文件之前，先创建一个分支，且切换在该分支上 git checkout -b BRANCH_NAME
+2. 现在可以修改项目了，要清楚现在是在你自己 Fork 的项目上操作的，跟原始的项目没暂时没关系，所以自己 push 到 Fork 项目之前，要从原始项目拉 1 次最新代码，比如我这里的远程 upstream 仓库 pull 最新的修改。
+3. 修改并提交完成之后，推送 git push origin BRANCH_NAME，这个分支名 是你 Fork 项目时创建的分支，现在是往 Forx 上 push，不是原始的仓库。
+4. 现在可以 pull request 了，打开你的 github Fork 的 macaca-chromedriver 项目 ，点击 new pull request ，可以查看原始项目和你 Fork 项目的不同分支，查看对比你修改的部分，如果你确定你的提交是没有问题的，点击确定，等待作者的反馈
+5. 收尾工作，如果贡献代码被采用合并了，或者被拒绝了，就可以删除本地分支了: git branch -D BRANCH_NAME ，删除 GitHub 上的分支: git push origin --delete BRANCH_NAME ,如果需要同步源项目代码到 Fork 项目 ，先把代码从源项目更新到最新 `git pull upstream master` 合并`git merge upstream/master` 再 push 到 Fork 项目上 `git push origin master`
+
+
+
+
+
+```
+将远程分支和本地分支同步
+git fetch origin –prune
+
+```
+

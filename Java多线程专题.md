@@ -368,6 +368,8 @@ synchronized (obj){
 
 一个线程调用共享对象的notify()方法后，会随机唤醒一个在该共享对象上调用wait系列方法后被挂起的线程。
 
+**当执行notify/notifyAll方法时，会唤醒一个处于等待该 对象锁 的线程，然后继续往下执行，直到执行完退出对象锁锁住的区域（synchronized修饰的代码块）后再释放锁。**
+
 被唤醒的线程不一定能够马上从wait系列方法之后执行，会先处于ready状态。需要该线程获取到了共享变量的监视器锁之后才可以继续执行。
 
 类似于wait系列方法，如果当前线程没有获取到共享变量的监视器锁，并调用共享变量的notify()方法，会抛出IllegalMonitorStateException。
@@ -667,7 +669,7 @@ InheritableThreadLocal重写了ThreadLocal的三个方法，其中createMamp和g
 
 
 
-### **线程主与线程优先级**
+### **线程组线程优先级**
 
 #### **线程组**
 
@@ -817,19 +819,19 @@ t2 ->> table : put("key", v2)
 Markword，这部分主要用来存储对象自身的运行时数据，如hashcode、gc分代年龄等。
 
 ```
-|-------------------------------------------------------|--------------------|
-|                  Mark Word (32 bits)                  |       State        |
-|-------------------------------------------------------|--------------------|
-| identity_hashcode:25 | age:4 | biased_lock:1 | lock:2 |       Normal       |
-|-------------------------------------------------------|--------------------|
-|  thread:23 | epoch:2 | age:4 | biased_lock:1 | lock:2 |       Biased       |
-|-------------------------------------------------------|--------------------|
-|               ptr_to_lock_record:30          | lock:2 | Lightweight Locked |
-|-------------------------------------------------------|--------------------|
-|               ptr_to_heavyweight_monitor:30  | lock:2 | Heavyweight Locked |
-|-------------------------------------------------------|--------------------|
-|                                              | lock:2 |    Marked for GC   |
-|-------------------------------------------------------|--------------------|
+|------------------------------------------------------- |--------------------|
+|                  Mark Word (32 bits)                   |       State        |
+|------------------------------------------------------- |--------------------|
+| identity_hashcode:25 | age:4 | biased_lock:0 | lock:01 |       Normal       |
+|------------------------------------------------------- |--------------------|
+|  thread:23 | epoch:2 | age:4 | biased_lock:1 | lock:01 |       Biased       |
+|------------------------------------------------------- |--------------------|
+|               ptr_to_lock_record:30          | lock:00 | Lightweight Locked |
+|------------------------------------------------------- |--------------------|
+|               ptr_to_heavyweight_monitor:30  | lock:10 | Heavyweight Locked |
+|------------------------------------------------------- |--------------------|
+|                                              | lock:11 |    Marked for GC   |
+|------------------------------------------------------- |--------------------|
 ```
 
 ### Monitor
@@ -847,6 +849,51 @@ Monitor被翻译为监视器或管程
 - 如果在Thread-2为Owner时，Thread-3，Thread-4，Thread-5也来执行synchronzied(obj)，就会进入EntryList BLOCKED
 - 当Thread-2执行完同步代码块的内容后，唤醒EntryList中等待的线程来竞争锁，竞争是非公平的
 - 图中WaitSet中的Thread-0，Thread-1是之前获得过锁，但是条件不满足进入WAITING状态的线程。
+
+**synchronized字节码**
+
+```
+package itcast.test;
+
+/**
+ * @author Wenjie FU
+ * @create 2021-11-02 21:08
+ */
+public class MonitorTest {
+    static final Object lock = new Object();
+    static int counter = 0;
+
+    public static void main(String[] args) {
+        synchronized (lock){
+            counter++;
+        }
+    }
+}
+
+```
+
+```
+ 0 getstatic #2 <itcast/test/MonitorTest.lock : Ljava/lang/Object;> //获取lock的引用
+ 3 dup //复制一份lock的引用
+ 4 astore_1 //将复制的那份储存起来 指向slot1
+ 5 monitorenter //将lock对象的MarWord置位Monitor指针
+ 6 getstatic #3 <itcast/test/MonitorTest.counter : I>
+ 9 iconst_1
+10 iadd
+11 putstatic #3 <itcast/test/MonitorTest.counter : I>
+14 aload_1 //获取之前存储的lock的引用
+15 monitorexit //将lock对象中的MarkWord重置，唤醒EntryList
+16 goto 24 (+8)
+//接下里负责处理监视器代码块内部出现异常
+19 astore_2 //将异常对象 e->存储到slot2中
+20 aload_1 //加载lock引用
+21 monitorexit //将lock对象中的MarkWord重置，唤醒EntryList
+22 aload_2 // <- 导入异常
+23 athrow //抛出异常
+24 return
+```
+
+![image-20211102211857734](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211102211857734.png)
 
 ### Java多线程内存模型
 
@@ -932,6 +979,177 @@ synchronized(同步监视器){
 - 同步方法/同步代码块调用Thread.sleep()、Thread.yield()
 - 线程执行同步代码块时，其他线程调用了该线程的挂起方法suspend()将该线程挂起，该线程不会释放锁
 
+## synchronized优化
+
+https://www.cnblogs.com/yescode/p/14474104.html
+
+#### 轻量级锁
+
+轻量级锁使用场景：如果一个对象有多个线程访问，但是多个线程的访问时间是错开的（也就是没有竞争），那么可以使用轻量级锁来进行优化
+
+轻量级锁的语法，仍然是synchronized
+
+加锁过程
+
+
+
+```java
+staitc final Object object = new Object();
+public static void methord1() {
+    synchronized(obj) {
+        method2();
+    }
+}
+
+public static void method2(){
+    synchronized(obj){
+        
+    }
+}
+```
+
+![image-20211102220934470](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211102220934470.png)
+
+- 首先创建锁记录（Lock Record）对象每个线程的栈帧中都包含一个锁记录的结构，内部可以储存锁定对象的Mark Word
+
+![image-20211102222028763](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211102222028763.png)
+
+![image-20211102222035680](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211102222035680.png)
+
+- 让锁记录中的Object reference指向锁对象，并尝试用CAS替换Object的Mark Word，将原先的Mark Word值存入锁记录。如果替换成功，则对象头中储存了 '锁记录地址和状态00'， 表示该线程给对象加锁
+
+- 如果失败，有两种情况
+
+  - 如果是其他线程已经持有了该Object的轻量级锁，这时表明有竞争，进入锁膨胀过程
+  - 如果是自己执行了synchronized锁重入，那么再添加一条Lock Record作为重入的计数
+
+  
+
+  ![image-20211102222438240](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211102222438240.png)
+
+- 当退出synchronized代码块时（解锁），如果有取值为null的锁记录，表示有重入，这时重置锁记录，表示重入计数减一
+
+- > 通过锁记录的个数可以看出一个线程对同一个对象加了多少次锁
+
+- 当退出synchronized代码块（解锁时），如果锁记录的值不是null，这时使用CAS将Mark Word的值恢复给对象头
+  - 成功，则解锁成功
+  - 失败，说明轻量级锁进行了锁膨胀或已经升级为重量级锁。进入重量级锁解锁流程 
+
+#### 锁膨胀
+
+如果在尝试在加轻量级锁的过程中，CAS操作无法成功，这时一种情况是其它线程为此对象加上了轻量级锁（有竞争），这时需要进行锁膨胀，将轻量级锁变为重量级锁
+
+```java
+static Object obj = new Object();
+
+public static void method1(){
+    synchronized( obj)
+        同步块
+}
+```
+
+- 当Threa-1进行轻量级加锁时，发现THread-0已经为该对象加了轻量级锁
+
+![image-20211103155603262](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211103155603262.png)
+
+- 这时Threa-1加轻量级锁失败，进入锁膨胀过程
+  - 即为Object对象申请Monitor锁，让Object指向重量级锁地址
+  - 然后自己进入Monitor的EntryList BLOCKED
+
+![image-20211103160255901](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211103160255901.png)
+
+- 当Thread-0退出同步块解锁时，使用CAS将Mark Word的值恢复给对象头，但是失败。这时会进入重量级解锁流程，即按照该Monitor地址找到Monitor对象，试着Owner为null，唤醒EntryList中Blocked线程
+
+#### 自旋优化
+
+ 重量级锁竞争的时候，还可以使用自旋来进行优化，如果当前线程自旋成功（即这时候持锁线程已经退出同步代码块，释放了锁），这时当前线程可以避免阻塞
+
+![image-20211103162232176](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211103162232176.png)
+
+![image-20211103162245188](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211103162245188.png)
+
+> 自旋同样会占用CPU时间，单核CPU自旋就是浪费时间，多核CPU自旋才能发挥优势
+
+#### 偏向锁
+
+轻量级锁在没有竞争的时候（也就是只有自己线程在运行的时候），每次重入仍然需要执行CAS操作。
+
+Java6中引入了偏向锁来做进一步优化：只有第一次使用CAS将线程ID设置到对象的Mark Word头，之后发现这个线程ID是自己的就表示没有竞争，不用重新CAS。以后只要不发生竞争，这个对象就归该线程所有
+
+```
+|  thread:23 | epoch:2 | age:4 | biased_lock:1 | lock:01 |       Biased       |
+```
+
+```java
+static final Object obj = new Object();
+
+public static void m1() {
+	synchronized(obj) {
+        m2;
+    }
+}
+
+public static void m2(){
+    synchronized(obj) {
+        m3();
+    }
+}
+
+public static void m3(){
+    synchronized(pbj){
+        //同步块
+    }
+}
+```
+
+![image-20211103164120209](Java%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%93%E9%A2%98.assets/image-20211103164120209.png)
+
+##### 偏向状态
+
+```
+|------------------------------------------------------- |--------------------|
+|                  Mark Word (32 bits)                   |       State        |
+|------------------------------------------------------- |--------------------|
+| identity_hashcode:25 | age:4 | biased_lock:0 | lock:01 |       Normal       |
+|------------------------------------------------------- |--------------------|
+|  thread:23 | epoch:2 | age:4 | biased_lock:1 | lock:01 |       Biased       |
+|------------------------------------------------------- |--------------------|
+|               ptr_to_lock_record:30          | lock:00 | Lightweight Locked |
+|------------------------------------------------------- |--------------------|
+|               ptr_to_heavyweight_monitor:30  | lock:10 | Heavyweight Locked |
+|------------------------------------------------------- |--------------------|
+|                                              | lock:11 |    Marked for GC   |
+|------------------------------------------------------- |--------------------|
+```
+
+一个对象创建是时
+
+- 如果开始了偏向锁（JVM默认是开启的），那么对象创建后，markword值为markword值为0x05即最后三位为101，这时她的thread、epoch、age都为0
+- 偏向锁是默认延迟的，不会在程序启动时立即生效，如果想避免延迟，可以加VM参数 -xx：BiasedLockingStartupDelay=0来禁用延迟
+- 如果没有开启偏向锁，那么对象创建后，markword值为0x01即最后3位为001，这时它的hashcode、age都为0。第一次用到hashcode时才会赋值
+
+##### 撤销偏向的情况
+
+**调用对象 hashCode**
+
+偏向锁的对象MarkWord中存储的是线程id。所以hashcode和偏向锁的标记在mark word中不能够同时存在，
+
+
+
+> - 当一个对象已经计算过identity hash code，它就无法进入偏向锁状态；
+> - 当一个对象当前正处于偏向锁状态，并且需要计算其identity hash code的话，则它的偏向锁会被撤销，并且锁会膨胀为轻量级锁或者重量锁
+> - 轻量级锁将hashcode存在线程栈帧的lock record中，而重量级锁将hashcode存在monitor中
+
+**其他线程使用对象**
+
+当有其它线程使用偏向锁对象时，会将偏向锁升级为轻量级锁
+
+**调用wait-notify**
+
+
+
+#### 批量重偏向
+
 ### **volatile关键字**
 
 使用synchronized需要获取和释放锁并进行线程的上下文切换，过于笨重。volatile关键词可以确保对一个变量的更新对其他线程马上可见。解决了内存的可见性问题（但是不保证操作的原子性）
@@ -942,6 +1160,8 @@ volatile提供了可见性保证，但是不保证操作的原子性
 
 - 写入变量值不依赖变量的当前值时可以使用volatile关键字。如果依赖当前值。如果依赖当前值将会是“获取-计算-写入”三步操作。
 - 读写变量时没有加锁。如果已经加锁了，锁就已经保证了内存的可见性。
+
+
 
 ### **锁**
 
