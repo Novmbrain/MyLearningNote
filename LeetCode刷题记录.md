@@ -181,9 +181,52 @@ return slow;
 
 ## 一、链表
 
+### 链表基础
+
 链表是一种兼具递归和迭代性质的数据结构
 
+#### **使用链表实现LRU算法**
 
+我的思路是这样的：我们维护一个有序单链表，越靠近链表尾部的结点是越早之前访问的。当有一个新的数据被访问时，我们从链表头开始顺序遍历链表。
+
+1. 如果此数据之前已经被缓存在链表中了，我们遍历得到这个数据对应的结点，并将其从原来的位置删除，然后再插入到链表的头部。
+2. 如果此数据没有在缓存链表中，又可以分为两种情况：
+   1. 如果此时缓存未满，则将此结点直接插入到链表的头部；
+   2. 如果此时缓存已满，则链表尾结点删除，将新的数据结点插入链表的头部。
+
+
+
+#### **链表题需要注意的地方**
+
+##### 警惕指针丢失
+
+插入结点时，一定要注意操作的顺序
+
+![image-20211104180647986](LeetCode%E5%88%B7%E9%A2%98%E8%AE%B0%E5%BD%95.assets/image-20211104180647986.png)
+
+```
+p->next = x;  // 将p的next指针指向x结点；
+x->next = p->next;  // 将x的结点的next指针指向b结点；
+```
+
+初学者经常会在这儿犯错。p->next 指针在完成第一步操作之后，已经不再指向结点 b 了，而是指向结点 x。第 2 行代码相当于将 x 赋值给 x->next，自己指向自己。因此，整个链表也就断成了两半，从结点 b 往后的所有结点都无法访问到了
+
+##### 使用哨兵节点统一逻辑
+
+针对链表的插入、删除操作，需要对插入第一个结点和删除最后一个结点的情况进行特殊处理。可以通过使用哨兵节点统一操作逻辑
+
+##### 链表边界条件处理
+
+我经常用来检查链表代码是否正确的边界条件有这样几个：
+
+1. 如果链表为空时，代码是否能正常工作？
+2. 如果链表只包含一个结点时，代码是否能正常工作？
+3. 如果链表只包含两个结点时，代码是否能正常工作？
+4. 代码逻辑在处理头结点和尾结点的时候，是否能正常工作？
+
+**典型链表题**
+
+单链表反转链表中环的检测两个有序的链表合并删除链表倒数第 n 个结点求链表的中间结点
 
 ### 递归法
 
@@ -369,8 +412,6 @@ class Solution {
  */
 ```
 
-
-
 ```java
 /**
  思路1：使用栈反转链表
@@ -378,16 +419,14 @@ class Solution {
 class Solution {
     public ListNode reverseList(ListNode head) {
         //1. Base Case
-        if(head == null){
-            return null;
-        }
-        if(head.next == null){
+        if(head == null || head.next == null){
             return head;
         }
         
         //2. 遍历链表，依次入栈
         Stack<ListNode> stack = new Stack<>();
         ListNode curNode = head; //curNode作为临时节点，用于遍历链表
+        
         //开始遍历链表
         while(curNode != null){
             //链表节点依次入栈
@@ -395,6 +434,7 @@ class Solution {
             //节点更新
             curNode = curNode.next;
         }
+
         //3. 遍历栈，反转链表
         //定义一个新的头结点，并指向栈顶节点
         ListNode newHead = stack.pop();
@@ -416,105 +456,63 @@ class Solution {
 /**
  思路2. 使用递归实现，自底向上拼装实现
  
- 
 对于递归算法，最重要的就是明确递归函数的定义:
 输入一个节点 head，将「以 head 为起点」的链表反转，并返回反转之后的头结点。
 ??所以递归先递归到头，再往回分析吗？还是可以利用递归函数的定义分析
 //当子问题原问题相同时，就可以使用递归思想
 */
+/**
+ 使用递归实现
+
+ 递归函数定义 ： 输入一个链表头结点，返回一个翻转的链表的头结点
+ */
 class Solution {
+
     public ListNode reverseList(ListNode head) {
-        //base case
-        if(head == null) return null;
-
-        //单向链表需要从最后一个节点的前一个节点开始操作，否则信息丢失
-        //递归到链表尾，返回最后尾节点作为前一次递归的last
-        if(head.next == null) return head; 
-        
-        ListNode last = reverseList(head.next);
-        //后一个节点指向前一个节点
-        head.next.next = head;
-        //前一个节点指向null
-        head.next = null;
-
-        return last;
-    }
-}
-
-------------------------------------------------------
-class Solution {
-    private ListNode newHead;
-    public ListNode reverseList(ListNode head) {
-        //base case
-        if(head == null) return head;
-
-        helpReverseList(head);
-
-        return newHead;
-    }
-
-    private ListNode helpReverseList(ListNode curNode){
-        //递归结束条件
-        if(curNode.next == null){
-            newHead = curNode;
-            return curNode;
+        //递归终止条件
+        if (head == null || head.next == null) {
+            return head; //返回null或者翻转后链表的头结点
         }
 
-        ListNode node = helpReverseList(curNode.next);
+        ListNode newHead = reverseList(head.next);
 
-        node.next = curNode;
-        curNode.next = null;
+        head.next.next = head;
+        head.next = null; //非常重要
 
-        return curNode;
+        return newHead;
+
     }
+}}
+
 }
 ```
 
 ```java
 /**
 思路3. 使用三个引用实现
+
+需要三个指针 prev cur next
  */
 class Solution {
+
     public ListNode reverseList(ListNode head) {
-        //base case
-        if(head == null || head.next == null) return head;
-        
-        //创建三个引用
-        ListNode pre = null; //这个很重要
-        ListNode cur = head;
-        ListNode next = head;
-
-        while(cur != null){
-            //将next的移动放到cur判断之后，防止空指针异常。同时也因为这里，初始化时next=head
-            next = next.next;
-
-            cur.next = pre;
-            //节点向后移动
-            pre = cur;
-            cur = next;
-
+        //递归终止条件
+        if (head == null || head.next == null) {
+            return head;
         }
 
-        return pre;
-    }
-}
-
-class Solution {
-    public ListNode reverseList(ListNode head) {
-        //base case
-        if(head == null || head.next == null) return head;
-        
-        ListNode pre = null;
+        ListNode prev = null;
         ListNode cur = head;
+        ListNode next;
 
-        while(cur != null){
-            ListNode next = cur.next;
-            cur.next = pre;
-            pre = cur;
-            cur = next;
+        while (cur != null) {
+            next = cur.next;
+            cur.next = prev;
+            prev = cur;
+            cur = next;     
         }
 
-        return pre;
+        return prev;
     }
 }
 ```
@@ -615,10 +613,6 @@ class Solution {
 ```
 
 
-
-
-
-### 简单双指针
 
 
 
@@ -815,14 +809,6 @@ class Solution {
 }
 ```
 
-
-
-
-
-
-
-
-
 ### 24. 两两交换链表的节点
 
 ```
@@ -867,13 +853,16 @@ reuturn newHead
 class Solution {
     public ListNode swapPairs(ListNode head) {
         //递归结束条件
-        if(head == null || head.next == null) return head;
-        
-        ListNode tempNode = head.next;
-        head.next = swapPairs(head.next.next);
-        tempNode.next = head;
-        
-        return tempNode;
+        if (head == null || head.next == null) {
+            return head;
+        }
+
+        ListNode headNext = head.next;
+        //这条语句必须在headNext.next 改变前先运行
+        head.next = swapPairs(headNext.next);
+        headNext.next = head;
+
+        return headNext;
     }
 }
 ```
@@ -910,12 +899,6 @@ class Solution {
         return dummy.next;
     }
 }
-```
-
-
-
-```
-
 ```
 
 
@@ -1082,28 +1065,31 @@ public class Solution {
  *     ListNode(int val, ListNode next) { this.val = val; this.next = next; }
  * }
  */
+/**
+这题的技巧是使用快慢指针
+ 以head == null 作为快指针到达链表尾部的标志
+ 当快指针到达链表尾部时，慢指针需要到达待删除节点的前驱节点
+
+ 所以快指针需要先走 n + 1步，这里出现的问题是如果倒数第n个是链表的头结点，先走n步已经到null了
+ 为了统一操作逻辑，需要在头结点前加一个节点
+  */
 class Solution {
     public ListNode removeNthFromEnd(ListNode head, int n) {
         //base case
         if(head == null) return null;
-        if(head.next == null) return null;
 
-        //初始化快慢指针
         ListNode dummy = new ListNode();
         dummy.next = head;
         ListNode fast = dummy;
         ListNode slow = dummy;
 
-        //本来，应该让快指针先前进n+1步，这样之后慢指针才能到达倒数第n个节点的前一个节点。但会出现的问题是，如果n与链表长度相同的话，走n步到达了null，再走第n+1步时就会有空指针异常
-        //解决方案是在head节点前加入一个dummy节点，指向head。通过多加一个节点就可以使得走到第n+1步为null
-        for(int i = 0; i < n+1; i++){
+        for(int i = 0; i <= n; i++){
             fast = fast.next;
         }
 
-        //然后快慢指针同速前进,当快指针到达null，慢指针到达快指针前一个节点
-        while(fast != null){
-            fast = fast.next;
+        while(fast != null) {
             slow = slow.next;
+            fast = fast.next;
         }
 
         slow.next = slow.next.next;
@@ -1564,11 +1550,207 @@ class Solution {
 }
 ```
 
+### 146.LRU缓存机制
 
+```java
+运用你所掌握的数据结构，设计和实现一个  LRU (最近最少使用) 缓存机制 。
+实现 LRUCache 类：
+
+LRUCache(int capacity) 以正整数作为容量 capacity 初始化 LRU 缓存
+int get(int key) 如果关键字 key 存在于缓存中，则返回关键字的值，否则返回 -1 。
+void put(int key, int value) 如果关键字已经存在，则变更其数据值；如果关键字不存在，则插入该组「关键字-值」。当缓存容量达到上限时，它应该在写入新数据之前删除最久未使用的数据值，从而为新的数据值留出空间。
+ 
+
+进阶：你是否可以在 O(1) 时间复杂度内完成这两种操作？
+
+```
+
+![image-20211103213009243](LeetCode%E5%88%B7%E9%A2%98%E8%AE%B0%E5%BD%95.assets/image-20211103213009243.png)
+
+```java
+/**
+这道题的实现思路是使用HahsMap和一个双向链表结合实现一个数据结构
+
+用HahsMap的键存储key，值存储双向链表的节点，节点中包含key，和value，这些节点彼此相连构成双向链表。
+
+链表需要提供的API
+
+addToHead()
+removeLast()
+removeNode()
+moveToHead()
+
+class DLinkedNode {
+    DLinkedNode prev;
+    DLinkedNode next;
+    int key, value;
+    public DLinkedNode(){}
+    public DLinkedNode(int key, int value){
+        this.key = key;
+        this.value = value;
+    }
+}
+
+在LRUCache中:
+
+int size; //用于记录双向链表的长度，和capacity进行比较
+//用于限定双向链表的两端
+DLinkedNode head;
+DLinkedNode tail;
+int capacity; //用来记录LRU的容量，和当前的size进行比较
+HashMap map;
+
+在get操作中：
+    1. 首先根据key到Map中寻找DLinkedNode
+        1. 如果能找的到key对应的DLinkedNode
+            1. 将当前这个DLinkedNode放到链表头
+            2. 从中DLinkedNode取出value并返回
+        2. 如果不能找到key对应的DLinkedNode，直接返回-1
+
+在put操作中 ：
+    1. 创建一个DLinkedNode 
+    2. 首先根据key到Map中寻找DLinkedNode
+        1. 如果能找到key对应的DLinkedNode
+            1. HashMap中，用新的DLinkedNode中替换旧的
+            2. 将旧从链表中删除
+            3. 将新DLinkedNode移到链表头
+        2. 如果不能找到Key对应的DLinkedNode
+            1. 如果size < capacity
+                1. 将DLinkedNode存入HashMap中
+                2. 将这个DLinkedNode放到链表头部
+                3. size++
+            2. 如果size >= capacity
+                1. 移除并获取双向链表最后一个元素
+                2. 根据获取的最后一个元素中的key，在HashMap中移除对应元素
+                3. size--
+                4. 将新的DLinkedNode存入HashMap中
+                5. 将DLinkedNode存入链表头
+
+ */
+class LRUCache {
+
+    private int capacity; 
+    // private int size;
+    private DLinkedNode head;
+    private DLinkedNode tail;
+    private HashMap<Integer, DLinkedNode> map;
+
+    class DLinkedNode {
+        DLinkedNode prev;
+        DLinkedNode next;
+        int key, value;
+        public DLinkedNode(){}
+        public DLinkedNode(int key, int value){
+            this.key = key;
+            this.value = value;
+        }
+    }
+
+    public LRUCache(int capacity) {
+        this.capacity = capacity;
+        map = new HashMap<>();
+        tail = new DLinkedNode();
+        head = new DLinkedNode();
+        //双向链表初始化
+        tail.prev = head;
+        head.next = tail;
+    }
+    
+    public int get(int key) {
+        DLinkedNode curNode = map.get(key);
+        
+        if (curNode != null) {
+            moveToHead(curNode);
+            return curNode.value;
+        } else {
+            return -1;
+        }
+    }
+
+    public void put(int key, int value) {
+        DLinkedNode curNode = map.get(key);
+
+        if (curNode != null) {
+            curNode.value = value;
+            moveToHead(curNode);
+        } else {
+
+            DLinkedNode newNode = new DLinkedNode(key, value);
+            int tempvalue1 = newNode.value;
+            if (map.size() >= capacity){
+                DLinkedNode lastNode = removeLast();
+                map.remove(lastNode.key);
+            } 
+            int tempvalue2 = newNode.value;
+            addToHead(newNode);
+            int tempvalue3 = newNode.value;
+            map.put(key, newNode);
+
+        }
+    }
+
+    public void addToHead(DLinkedNode node){
+        node.next = head.next;
+        head.next.prev = node;
+
+        head.next = node;
+        node.prev = head;
+        
+    }
+
+    public void removeNode(DLinkedNode node){
+        node.prev.next = node.next;
+        node.next.prev = node.prev;
+    }
+
+    public DLinkedNode removeLast(){
+        DLinkedNode lastNode =  tail.prev;
+        removeNode(lastNode);
+        return lastNode;
+    }
+
+    public void moveToHead(DLinkedNode node){
+        removeNode(node);
+        addToHead(node);
+    }
+}
+
+/**
+ * Your LRUCache object will be instantiated and called as such:
+ * LRUCache obj = new LRUCache(capacity);
+ * int param_1 = obj.get(key);
+ * obj.put(key,value);
+ */
+```
 
 
 
 ## 二、数组
+
+数组（Array）是一种线性表结构。它用一组连续的内存空间，来存储一组具有相同类型的数据
+
+优点：
+
+	- 随机范围，时间复杂度为O（1）
+
+缺点：
+
+- 插入元素的时间复杂度为O（n）。但是如果不要求插入后数组有序，可以将插入位置原本的元素直接移动到数组末尾，然后插入，这样只有O（1）
+- 删除时间复杂度为O（n）。但是可以通过标记-清除的思想，先标记需要删除的元素，当数组空间用完时再一次性执行删除操作，减少数据搬移的次数。
+
+**数组和容器类比较**
+
+在Java中是否有了类似ArrayList这些容器类，就没有数组的存在必要呢
+
+- Java中的 ArrayList并不能储存基本类型。将基本类型转化为封装类是有一定性能消耗的。如果特备关注性能选择使用数组
+
+- 如果数据大小事先已知且对数据的操作非常简单，可以使用数组
+
+  
+
+对于业务开发，直接使用容器就足够了，省时省力。
+
+
 
 ### 双指针
 
@@ -2163,112 +2345,9 @@ class CustomStack {
 }
 ```
 
-#### 20. 有效括号
-
-```
-给定一个只包括 '('，')'，'{'，'}'，'['，']' 的字符串 s ，判断字符串是否有效。
-
-有效字符串需满足：
-
-左括号必须用相同类型的右括号闭合。
-左括号必须以正确的顺序闭合。
-```
-
-思路：
-
-- 迭代法实现:如果是[,{,( 就将其压入栈然后指针++
-- 当遇到反括号的时候将栈顶的正括号出栈
-- 将当前指针的反括号和出栈的正括号进行匹配。
-  - 如果匹配失败，false
-  - 如果匹配成功，指针++ 
-
-```java
-class Solution {
 
 
 
-    private Stack<Character> stack = new Stack<>();
-
-    public boolean isValid(String s) {
-        for(int i = 0; i < s.length(); i++){
-
-            char curChar = s.charAt(i);
-
-            if(curChar == '(' || curChar == '{' || curChar == '['){
-
-                stack.push(curChar);
-
-            } else{
-                //指向栈顶的char
-                if(stack.isEmpty()) return false;
-
-                char top = stack.pop();
-
-                switch(top){
-                    case '(':
-                        if(curChar != ')') return false;
-                        break;
-                    case '{':
-                        if(curChar != '}') return false;
-                        break;
-                    case '[':
-                        if(curChar != ']') return false;
-                        break;
-                    default:
-                        break;
-
-                }
-
-            } 
-
-        }
-		//这里其实是合并了两种情况
-        return stack.isEmpty();
-
-    }
-}
-```
-
-思路：使用Map进行辅助，将一对正确的括号作为键值对存入Map当中，就可以不使用switch case
-
-```java
-class Solution {
-
-    private Stack<Character> stack = new Stack<>();
-    private Map<Character, Character> hashMap = new HashMap<>();
-
-    public boolean isValid(String s) {
-
-        hashMap.put('(',')');
-        hashMap.put('[',']');
-        hashMap.put('{','}');
-
-        for(int i = 0; i < s.length(); i++){
-
-            char curChar = s.charAt(i);
-
-            if(curChar == '(' || curChar == '{' || curChar == '['){
-
-                stack.push(curChar);
-
-            } else{
-                //指向栈顶的char
-                if(stack.isEmpty() || hashMap.get(stack.pop()) != curChar) return false;
-            } 
-
-        }
-
-        return stack.isEmpty();
-
-    }
-}
-```
-
-思路：我们还可以采用递归实现。通常用栈实现的程序都能够用递归重新实现一遍。因为递归就是隐式的调用栈。
-
-```
-
-```
 
 #### 394. 字符串解码
 
@@ -3197,9 +3276,116 @@ class Solution {
     }
 ```
 
+## 栈
 
 
 
+#### 20. 有效括号
+
+```
+给定一个只包括 '('，')'，'{'，'}'，'['，']' 的字符串 s ，判断字符串是否有效。
+
+有效字符串需满足：
+
+左括号必须用相同类型的右括号闭合。
+左括号必须以正确的顺序闭合。
+```
+
+思路：
+
+- 迭代法实现:如果是[,{,( 就将其压入栈然后指针++
+- 当遇到反括号的时候将栈顶的正括号出栈
+- 将当前指针的反括号和出栈的正括号进行匹配。
+  - 如果匹配失败，false
+  - 如果匹配成功，指针++ 
+
+```java
+class Solution {
+
+
+
+    private Stack<Character> stack = new Stack<>();
+
+    public boolean isValid(String s) {
+        for(int i = 0; i < s.length(); i++){
+
+            char curChar = s.charAt(i);
+
+            if(curChar == '(' || curChar == '{' || curChar == '['){
+
+                stack.push(curChar);
+
+            } else{
+                //指向栈顶的char
+                if(stack.isEmpty()) return false;
+
+                char top = stack.pop();
+
+                switch(top){
+                    case '(':
+                        if(curChar != ')') return false;
+                        break;
+                    case '{':
+                        if(curChar != '}') return false;
+                        break;
+                    case '[':
+                        if(curChar != ']') return false;
+                        break;
+                    default:
+                        break;
+
+                }
+
+            } 
+
+        }
+		//这里其实是合并了两种情况
+        return stack.isEmpty();
+
+    }
+}
+```
+
+思路：使用Map进行辅助，将一对正确的括号作为键值对存入Map当中，就可以不使用switch case
+
+```java
+class Solution {
+
+    private Stack<Character> stack = new Stack<>();
+    private Map<Character, Character> hashMap = new HashMap<>();
+
+    public boolean isValid(String s) {
+
+        hashMap.put('(',')');
+        hashMap.put('[',']');
+        hashMap.put('{','}');
+
+        for(int i = 0; i < s.length(); i++){
+
+            char curChar = s.charAt(i);
+
+            if(curChar == '(' || curChar == '{' || curChar == '['){
+
+                stack.push(curChar);
+
+            } else{
+                //指向栈顶的char
+                if(stack.isEmpty() || hashMap.get(stack.pop()) != curChar) return false;
+            } 
+
+        }
+
+        return stack.isEmpty();
+
+    }
+}
+```
+
+思路：通过求和来进行判断
+
+105.逆波兰表达式求值
+
+思路：我们还可以采用递归实现。通常用栈实现的程序都能够用递归重新实现一遍。因为递归就是隐式的调用栈。
 
 ## 树
 

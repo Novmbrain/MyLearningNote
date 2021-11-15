@@ -350,3 +350,35 @@ git fetch origin –prune
 
 ```
 
+```
+package metarettaf;
+
+import java.io.IOException;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONObject;
+
+public class Avwx {
+	public static JSONObject getJson() throws IOException {
+		CloseableHttpClient httpclient = HttpClients.createDefault();
+		HttpGet httpGet = new HttpGet("https://avwx.rest/api/taf/LFRB");
+		CloseableHttpResponse response1 = httpclient.execute(httpGet);
+		
+		HttpEntity entity = response1.getEntity();
+		String result = EntityUtils.toString(entity);
+		EntityUtils.consume(entity);
+		
+		JSONObject jsonObject = new JSONObject(result);
+		
+		System.out.println(jsonObject.toString());
+		return jsonObject;
+	}
+
+}
+```
+
